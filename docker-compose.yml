@@ -1,13 +1,11 @@
 version: "3"
 
-
 volumes:
   ckan_storage:
   pg_data:
   solr_data:
 
 services:
-
   nginx:
     container_name: ${NGINX_CONTAINER_NAME}
     build:
@@ -20,7 +18,11 @@ services:
       ckan:
         condition: service_healthy
     ports:
-      - "0.0.0.0:${NGINX_SSLPORT_HOST}:${NGINX_SSLPORT}"
+      - "0.0.0.0:${NGINX_PORT_HOST}:${NGINX_PORT}"  # Change SSL port to non-SSL port
+    deploy:
+      resources: 
+        limits:
+          memory: 650M
     
   ckan:
     container_name: ${CKAN_CONTAINER_NAME}
@@ -48,7 +50,11 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:5000"]
-    
+    deploy:
+      resources: 
+        limits:
+          memory: 250M
+
   datapusher:
     container_name: ${DATAPUSHER_CONTAINER_NAME}
     networks:
@@ -58,6 +64,10 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:8800"]
+    deploy:
+      resources: 
+        limits:
+          memory: 100M
 
   db:
     container_name: ${POSTGRESQL_CONTAINER_NAME}
@@ -80,6 +90,10 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "${POSTGRES_DB}"]
+    deploy:
+      resources: 
+        limits:
+          memory: 200M
      
   solr:
     container_name: ${SOLR_CONTAINER_NAME}
@@ -91,6 +105,10 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:8983/solr/"]
+    deploy:
+      resources: 
+        limits:
+          memory: 550M
 
   redis:
     container_name: ${REDIS_CONTAINER_NAME}
@@ -100,6 +118,10 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "-e", "QUIT"]
+    deploy:
+      resources: 
+        limits:
+          memory: 250M
     
 networks:
   webnet:
