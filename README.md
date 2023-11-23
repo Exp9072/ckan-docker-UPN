@@ -1,3 +1,273 @@
+CARA INSTALL
+Langkah-Langkah :
+* Pertama, clone CKAN dari github dengan menggunakan perintah sebagai berikut : 
+	git clone https://github.com/ckan/ckan-docker di terminal 
+* Setelah melakukan clone CKAN pada github ubah nama file .env.example menjadi .env pada folder ckan-docker.
+* Ubah isi dari file .env tersebut seperti di bawah ini.
+  
+	# Container names
+NGINX_CONTAINER_NAME=nginx
+REDIS_CONTAINER_NAME=redis
+POSTGRESQL_CONTAINER_NAME=db
+SOLR_CONTAINER_NAME=solr
+DATAPUSHER_CONTAINER_NAME=datapusher
+CKAN_CONTAINER_NAME=ckan
+WORKER_CONTAINER_NAME=ckan-worker
+
+# Host Ports
+CKAN_PORT_HOST=5000
+NGINX_PORT_HOST=81
+
+# CKAN databases
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=postgres
+POSTGRES_HOST=db
+CKAN_DB_USER=ckandbuser
+CKAN_DB_PASSWORD=ckandbpassword
+CKAN_DB=ckandb
+DATASTORE_READONLY_USER=datastore_ro
+DATASTORE_READONLY_PASSWORD=datastore
+DATASTORE_DB=datastore
+CKAN_SQLALCHEMY_URL=postgresql://ckandbuser:ckandbpassword@db/ckandb
+CKAN_DATASTORE_WRITE_URL=postgresql://ckandbuser:ckandbpassword@db/datastore
+CKAN_DATASTORE_READ_URL=postgresql://datastore_ro:datastore@db/datastore
+
+# Test database connections
+TEST_CKAN_SQLALCHEMY_URL=postgres://ckan:ckan@db/ckan_test
+TEST_CKAN_DATASTORE_WRITE_URL=postgresql://ckan:ckan@db/datastore_test
+TEST_CKAN_DATASTORE_READ_URL=postgresql://datastore_ro:datastore@db/datastore_test
+
+# Dev settings
+USE_HTTPS_FOR_DEV=false
+
+# CKAN core
+CKAN_VERSION=2.10.0
+CKAN_SITE_ID=default
+CKAN_SITE_URL=http://localhost:81
+CKAN_PORT=5000
+CKAN_PORT_HOST=5000
+CKAN___BEAKER__SESSION__SECRET=CHANGE_ME
+# See https://docs.ckan.org/en/latest/maintaining/configuration.html#api-token-settings
+CKAN___API_TOKEN__JWT__ENCODE__SECRET=string:CHANGE_ME
+CKAN___API_TOKEN__JWT__DECODE__SECRET=string:CHANGE_ME
+CKAN_SYSADMIN_NAME=ckan_admin
+CKAN_SYSADMIN_PASSWORD=test1234
+CKAN_SYSADMIN_EMAIL=your_email@example.com
+CKAN_STORAGE_PATH=/var/lib/ckan
+CKAN_SMTP_SERVER=smtp.corporateict.domain:25
+CKAN_SMTP_STARTTLS=True
+CKAN_SMTP_USER=user
+CKAN_SMTP_PASSWORD=pass
+CKAN_SMTP_MAIL_FROM=ckan@localhost
+TZ=Asia/Jakarta
+
+# Solr
+SOLR_IMAGE_VERSION=2.10-solr9
+CKAN_SOLR_URL=http://solr:8983/solr/ckan
+TEST_CKAN_SOLR_URL=http://solr:8983/solr/ckan
+
+# Redis
+REDIS_VERSION=6
+CKAN_REDIS_URL=redis://redis:6379/1
+TEST_CKAN_REDIS_URL=redis://redis:6379/1
+
+# Datapusher
+DATAPUSHER_VERSION=0.0.20
+CKAN_DATAPUSHER_URL=http://datapusher:8800
+CKAN__DATAPUSHER__CALLBACK_URL_BASE=http://ckan:5000
+DATAPUSHER_REWRITE_RESOURCES=True
+DATAPUSHER_REWRITE_URL=http://ckan:5000
+
+# NGINX
+NGINX_PORT=80
+
+# Extensions
+CKAN__PLUGINS="envvars image_view text_view recline_view datastore datapusher"
+CKAN__HARVEST__MQ__TYPE=redis
+CKAN__HARVEST__MQ__HOSTNAME=redis
+CKAN__HARVEST__MQ__PORT=6379
+CKAN__HARVEST__MQ__REDIS_DB=1
+
+* Ubah isi dari file docker-compose.yml sepeti di bawah ini.
+  
+	version: "3"
+
+volumes:
+  ckan_storage:
+  pg_data:
+  solr_data:
+
+services:
+  nginx:
+    container_name: ${NGINX_CONTAINER_NAME}
+    build:
+      context: nginx/
+      dockerfile: Dockerfile
+    networks:
+      - webnet
+      - ckannet
+    depends_on:
+      ckan:
+        condition: service_healthy
+    ports:
+      - "0.0.0.0:${NGINX_PORT_HOST}:${NGINX_PORT}"  # Change SSL port to non-SSL port
+    deploy:
+      resources: 
+        limits:
+          memory: 650M
+    
+  ckan:
+    container_name: ${CKAN_CONTAINER_NAME}
+    build:
+      context: ckan/
+      dockerfile: Dockerfile
+      args:
+        - TZ=${TZ}
+    networks:
+      - ckannet
+      - dbnet
+      - solrnet
+      - redisnet
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      solr:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ckan_storage:/var/lib/ckan
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:5000"]
+    deploy:
+      resources: 
+        limits:
+          memory: 250M
+
+  datapusher:
+    container_name: ${DATAPUSHER_CONTAINER_NAME}
+    networks:
+      - ckannet
+      - dbnet
+    image: ckan/ckan-base-datapusher:${DATAPUSHER_VERSION}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:8800"]
+    deploy:
+      resources: 
+        limits:
+          memory: 100M
+
+  db:
+    container_name: ${POSTGRESQL_CONTAINER_NAME}
+    build:
+      context: postgresql/
+    networks:
+      - dbnet
+    environment:
+      - POSTGRES_USER
+      - POSTGRES_PASSWORD
+      - POSTGRES_DB
+      - CKAN_DB_USER
+      - CKAN_DB_PASSWORD
+      - CKAN_DB
+      - DATASTORE_READONLY_USER
+      - DATASTORE_READONLY_PASSWORD
+      - DATASTORE_DB
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "${POSTGRES_DB}"]
+    deploy:
+      resources: 
+        limits:
+          memory: 200M
+     
+  solr:
+    container_name: ${SOLR_CONTAINER_NAME}
+    networks:
+      - solrnet
+    image: ckan/ckan-solr:${SOLR_IMAGE_VERSION}
+    volumes:
+      - solr_data:/var/solr
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:8983/solr/"]
+    deploy:
+      resources: 
+        limits:
+          memory: 550M
+
+  redis:
+    container_name: ${REDIS_CONTAINER_NAME}
+    image: redis:${REDIS_VERSION}
+    networks:
+      - redisnet
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-e", "QUIT"]
+    deploy:
+      resources: 
+        limits:
+          memory: 250M
+    
+networks:
+  webnet:
+  ckannet:
+  solrnet:
+    internal: true
+  dbnet:
+    internal: true
+  redisnet:
+    internal: true
+
+* Ubah isi default.conf pada folder ckan-docker/nginx/setup seperti di bawah ini.
+  
+	server {
+    listen 80;  # Use plain HTTP on port 80
+    listen [::]:80;  # Use plain HTTP on IPv6 for port 80
+    server_name localhost;
+
+    # Other configuration settings for plain HTTP can go here
+
+    location / {
+        proxy_pass http://ckan:5000/;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header Host $host;
+        proxy_cache cache;
+        proxy_cache_bypass $cookie_auth_tkt;
+        proxy_no_cache $cookie_auth_tkt;
+        proxy_cache_valid 30m;
+        proxy_cache_key $host$scheme$proxy_host$request_uri;
+    }
+
+    error_page 400 401 402 403 404 405 406 407 408 409 410 411 412 413 414 415 416 417 418 421 422 423 424 425 426 428 429 431 451 500 501 502 503 504 505 506 507 508 510 511 /error.html;
+
+    # Redirect server error pages to the static page /error.html
+    location = /error.html {
+      ssi on;
+      internal;
+      auth_basic off;
+      root /usr/share/nginx/html;
+    }
+}
+
+* Kemudian pada teriminal dengan path folder ckan-docker jalankan perintah ini :
+	docker compose -f docker-compose.yml build
+* Setelah perintah pada langkah sebelumnya dijalankan maka jalankan perintah ini pada terminal :
+	docker compose -f docker-compose.yml up -d 
+* Periksa apakah semua container sudah berjalan. Setelah dipastikan semua container sudah berstatus running maka buka websitenya dengan link localhost:81.
+
+
+
+
+
+
 # Docker Compose setup for CKAN
 
 
