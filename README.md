@@ -1,7 +1,6 @@
 CARA INSTALL
 Langkah-Langkah :
-* Pertama, clone CKAN dari github dengan menggunakan perintah sebagai berikut : 
-	git clone https://github.com/ckan/ckan-docker di terminal 
+* Pertama, clone CKAN dari github ini.
 * Kemudian pada teriminal dengan path folder ckan-docker jalankan perintah ini :
 	docker compose -f docker-compose.yml build
 * Setelah perintah pada langkah sebelumnya dijalankan maka jalankan perintah ini pada terminal :
